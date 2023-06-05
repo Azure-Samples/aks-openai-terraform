@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: magic8ball
+  labels:
+    app: magic8ball
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: magic8ball
+      azure.workload.identity/use: "true"
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5
+  template:
+    metadata:
+      labels:
+        app: magic8ball
+        azure.workload.identity/use: "true"
+        prometheus.io/scrape: "true"
+    spec:
+      serviceAccountName: magic8ball-sa
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: magic8ball
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: magic8ball
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+      - name: magic8ball
+        image: paolosalvatori.azurecr.io/magic8ball:v1
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8501
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          failureThreshold: 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          failureThreshold: 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8501
+          failureThreshold: 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+        env:
+        - name: TITLE
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: TITLE
+        - name: IMAGE_WIDTH
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: IMAGE_WIDTH
+        - name: LABEL
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: LABEL
+        - name: TEMPERATURE
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: TEMPERATURE
+        - name: AZURE_OPENAI_TYPE
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: AZURE_OPENAI_TYPE
+        - name: AZURE_OPENAI_BASE
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: AZURE_OPENAI_BASE
+        - name: AZURE_OPENAI_KEY
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: AZURE_OPENAI_KEY
+        - name: AZURE_OPENAI_MODEL
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: AZURE_OPENAI_MODEL
+        - name: AZURE_OPENAI_DEPLOYMENT
+          valueFrom:
+            configMapKeyRef:
+                name: magic8ball-configmap
+                key: AZURE_OPENAI_DEPLOYMENT
