@@ -1,0 +1,9 @@
+name_prefix            = "magic8ball"
+domain                 = "contoso.com"
+subdomain              = "magic"
+namespace              = "magic8ball"
+service_account_name   = "magic8ball-sa"
+ssh_public_key         = "XXXXXXX"
+vm_enabled             = true
+location               = "westeurope"
+admin_group_object_ids = ["XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"] 

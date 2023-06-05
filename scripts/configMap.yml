@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: magic8ball-configmap
+data:
+  TITLE: "Magic 8 Ball"
+  LABEL: "Pose your question and cross your fingers!"
+  TEMPERATURE: "0.9"
+  IMAGE_WIDTH: "80"
+  AZURE_OPENAI_TYPE: azure_ad
+  AZURE_OPENAI_BASE: https://myopenai.openai.azure.com/
+  AZURE_OPENAI_KEY: ""
+  AZURE_OPENAI_MODEL: gpt-35-turbo
+  AZURE_OPENAI_DEPLOYMENT: magic8ballGPT
