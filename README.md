@@ -403,11 +403,11 @@ resource "azurerm_federated_identity_credential" "federated_identity_credential"
 }
 ```
 
-The above code snippets performs the following steps:
+The above code snippet performs the following steps:
 
 - Creates a new user-defined managed identity.
 - Assign the new managed identity to the Cognitive Services User role with the resource group as a scope.
-- Federate the managed identity with the service account used by the chatbot. The following information are necessary to create the federated identity credentials:
+- Federate the managed identity with the service account used by the chatbot. The following information is necessary to create the federated identity credentials:
   - The Kubernetes service account name.
   - The Kubernetes namespace that will host the chatbot application.
   - The URL of the OpenID Connect (OIDC) token issuer endpoint for [Azure AD workload identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview)
@@ -1355,13 +1355,13 @@ docker push $loginServer/${imageName,,}:$tag
 
 If you deployed the Azure infrastructure using the Terraform modules provided with this sample, you only need to deploy the application using the following scripts and YAML templates in the `scripts` folder.
 
-** scripts**
+**Scripts**
 
 - `09-deploy-app.sh`
 - `10-create-ingress.sh`
 - `11-configure-dns.sh`
 
-** YAML manifests**
+**YAML manifests**
 
 - `configMap.yml`
 - `deployment.yml`
@@ -1878,7 +1878,7 @@ The scripts used to deploy the YAML template use the [yq](https://github.com/mik
 Below you can read the YAML manifests used to deploy the `magic8ball` chatbot to AKS.
 
 **configmap.yml**
-The `configmap.yml` defines a value for the environment variables passed to the application container. The configmap does not define any environment variable for the OpenAI key as the container .
+The `configmap.yml` defines a value for the environment variables passed to the application container. The configmap does not define any environment variable for the OpenAI key as the container.
 
 ```yaml
 apiVersion: v1
