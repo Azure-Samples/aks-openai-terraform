@@ -172,6 +172,8 @@ admin_group_object_ids = ["XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"]
 
 We suggest reading sensitive configuration data such as passwords or SSH keys from a pre-existing Azure Key Vault resource. For more information, see [Referencing Azure Key Vault secrets in Terraform](https://thomasthornton.cloud/2022/02/26/referencing-azure-key-vault-secrets-in-terraform/).
 
+Before proceeding, also make sure to run the `register-preview-features.sh` Bash script in the `terraform` folder to register any preview feature used by the AKS cluster.
+
 ## OpenAI Terraform Module
 
 The following table contains the code from the `openai.tf` Terraform module used to deploy the [Azure OpenAI Service](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/cognitive_account).
@@ -720,6 +722,8 @@ The `install-nginx-via-helm-and-create-sa.sh` Bash script returns the following 
 - Prometheus namespace
 - Cert-manager namespace
 - NGINX ingress controller namespace
+
+You can find the `install-nginx-via-helm-and-create-sa.sh` file under the `terraform` folder.
 
 ## Chatbot Application
 
