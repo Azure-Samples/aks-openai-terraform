@@ -447,4 +447,8 @@ module "deployment_script" {
   subscription_id                     = data.azurerm_client_config.current.subscription_id
   workload_managed_identity_client_id = azurerm_user_assigned_identity.aks_workload_identity.client_id
   tags                                = var.tags
+
+  depends_on = [ 
+    module.aks_cluster
+   ]
 }
