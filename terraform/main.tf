@@ -385,7 +385,7 @@ module "openai_private_endpoint" {
   is_manual_connection           = false
   subresource_name               = "account"
   private_dns_zone_group_name    = "AcrPrivateDnsZoneGroup"
-  private_dns_zone_group_ids     = [module.acr_private_dns_zone.id]
+  private_dns_zone_group_ids     = [module.openai_private_dns_zone.id]
 }
 
 module "acr_private_endpoint" {
