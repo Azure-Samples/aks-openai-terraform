@@ -25,6 +25,7 @@ products:
 - azure-log-analytics
 - azure-virtual-machines
 name:  How to install an AKS cluster with the Istio service mesh add-on via Terraform
+urlFragment: aks-openai-terraform
 description: This sample shows how to install an AKS cluster with the Istio service mesh add-on via Terraform.
 ---
 
