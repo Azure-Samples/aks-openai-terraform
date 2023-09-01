@@ -43,7 +43,7 @@ jc==1.23.1
 Jinja2==3.0.2
 joblib==1.2.0
 jsonschema==4.17.3
-langchain==0.0.169
+langchain==0.0.246
 lit==16.0.3
 llama-index==0.6.8
 lz4==4.3.2
