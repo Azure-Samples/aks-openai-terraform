@@ -746,6 +746,10 @@ The following table contains the code of the `app.py` chatbot:
 
 ```python
 # Import packages
+import base64
+import binascii
+import hashlib
+import hmac
 import os
 import sys
 import time
@@ -802,14 +806,14 @@ api_type = os.environ.get("AZURE_OPENAI_TYPE", "azure")
 api_version = os.environ.get("AZURE_OPENAI_VERSION", "2023-05-15")
 engine = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 model = os.getenv("AZURE_OPENAI_MODEL")
+app_password_hash = os.getenv("APP_PASSWORD_HASH")
 
 # Configure OpenAI
 openai.api_type = api_type
 openai.api_version = api_version
 openai.api_base = api_base 
 
-# Set default Azure credential
-default_credential = DefaultAzureCredential() if openai.api_type == "azure_ad" else None
+default_credential = None
 
 # Configure a logger
 logging.basicConfig(stream = sys.stdout, 
@@ -825,16 +829,57 @@ logger.info(f"image_width: {image_width}")
 logger.info(f"temperature: {temperature}")
 logger.info(f"system: {system}")
 logger.info(f"api_base: {api_base}")
-logger.info(f"api_key: {api_key}")
+logger.info("api_key: configured" if api_key else "api_key: not configured")
 logger.info(f"api_type: {api_type}")
 logger.info(f"api_version: {api_version}")
 logger.info(f"engine: {engine}")
 logger.info(f"model: {model}")
 
+def verify_password(password, encoded_hash):
+  try:
+    algorithm, iterations, salt, expected = encoded_hash.split("$", 3)
+    if algorithm != "pbkdf2_sha256":
+      logger.error("Invalid APP_PASSWORD_HASH algorithm.")
+      return False
+
+    actual = hashlib.pbkdf2_hmac(
+      "sha256",
+      password.encode("utf-8"),
+      base64.b64decode(salt),
+      int(iterations))
+    return hmac.compare_digest(actual, base64.b64decode(expected))
+  except (ValueError, binascii.Error):
+    logger.error("Invalid APP_PASSWORD_HASH format.")
+    return False
+
+def require_app_authentication():
+  if not app_password_hash:
+    st.error("Application authentication is not configured. Set APP_PASSWORD_HASH before deployment.")
+    st.stop()
+
+  if st.session_state.get("authenticated"):
+    return
+
+  st.title(title)
+  password = st.text_input("Password", type = "password", key = "app_password")
+  if st.button("Sign in"):
+    if verify_password(password, app_password_hash):
+      st.session_state["authenticated"] = True
+      del st.session_state["app_password"]
+      st.experimental_rerun()
+    else:
+      logger.warning("Failed application sign-in attempt.")
+      st.error("Invalid password.")
+
+  st.stop()
+
+require_app_authentication()
+
 # Authenticate to Azure OpenAI
 if openai.api_type == "azure":
   openai.api_key = api_key
 elif openai.api_type == "azure_ad":
+  default_credential = DefaultAzureCredential()
   openai_token = default_credential.get_token("https://cognitiveservices.azure.com/.default")
   openai.api_key = openai_token.token
   if 'openai_token' not in st.session_state:
@@ -1086,11 +1131,12 @@ Make sure to provide a value for the following environment variables when testin
 - `AZURE_OPENAI_KEY`: the key of your Azure OpenAI resource.
 - `AZURE_OPENAI_DEPLOYMENT`: the name of the ChatGPT deployment used by your Azure OpenAI resource, for example `gpt-35-turbo`.
 - `AZURE_OPENAI_MODEL`: the name of the ChatGPT model used by your Azure OpenAI resource, for example `gpt-35-turbo`.
+- `APP_PASSWORD_HASH`: a PBKDF2 SHA-256 password hash used to authenticate users before they can submit prompts.
 - `TITLE`: the title of the Streamlit app.
 - `TEMPERATURE`: the temperature used by the OpenAI API to generate the response.
 - `SYSTEM`: give the model instructions about how it should behave and any context it should reference when generating a response. Used to describe the assistant's personality.
 
-When deploying the application to Azure Kubernetes Service (AKS) these values are provided in a Kubernetes [ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/). For more information, see the next section.
+When deploying the application to Azure Kubernetes Service (AKS), non-sensitive values are provided in a Kubernetes [ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/) and sensitive values such as `APP_PASSWORD_HASH` and `AZURE_OPENAI_KEY` are provided in a Kubernetes [Secret](https://kubernetes.io/docs/concepts/configuration/secret/). For more information, see the next section.
 
 ## OpenAI Library
 
@@ -1287,8 +1333,11 @@ openAiName="CoralOpenAi "
 openAiResourceGroupName="CoralRG"
 openAiType="azure_ad"
 openAiBase="https://coralopenai.openai.azure.com/"
+openAiKey="${AZURE_OPENAI_KEY:-}"
 openAiModel="gpt-35-turbo"
 openAiDeployment="gpt-35-turbo"
+appPassword="${APP_PASSWORD:-}"
+appPasswordHash="${APP_PASSWORD_HASH:-}"
 
 # Nginx Ingress Controller
 nginxNamespace="ingress-basic"
@@ -1720,7 +1769,7 @@ fi
 
 **09-deploy-app.sh`**
 
-This script creates the Kubernetes config map, deployment, and service used by the `magic8ball` chatbot.
+This script creates the Kubernetes secret, config map, deployment, and service used by the `magic8ball` chatbot. Set `APP_PASSWORD` or `APP_PASSWORD_HASH` before running it so the deployed web app requires authentication before users can submit prompts. If `openAiType` is `azure`, also set `AZURE_OPENAI_KEY`; the script stores it in a Kubernetes Secret instead of a ConfigMap.
 
 ```bash
 #!/bin/bash
@@ -1747,6 +1796,39 @@ else
   echo "creating $namespace namespace in the cluster..."
   kubectl create namespace $namespace
 fi
+
+# Create secret
+if [[ -z $appPasswordHash ]]; then
+  if [[ -z $appPassword ]]; then
+    echo "Set APP_PASSWORD or APP_PASSWORD_HASH before deploying the sample application."
+    exit 1
+  fi
+
+  appPasswordHash=$(APP_PASSWORD="$appPassword" python3 - <<'PY'
+import base64
+import hashlib
+import os
+
+password = os.environ["APP_PASSWORD"].encode("utf-8")
+salt = os.urandom(16)
+iterations = 260000
+key = hashlib.pbkdf2_hmac("sha256", password, salt, iterations)
+print(f"pbkdf2_sha256${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}")
+PY
+)
+fi
+
+if [[ $openAiType == "azure" && -z $openAiKey ]]; then
+  echo "Set AZURE_OPENAI_KEY when openAiType is azure."
+  exit 1
+fi
+
+kubectl create secret generic magic8ball-secret \
+  --from-literal=APP_PASSWORD_HASH="$appPasswordHash" \
+  --from-literal=AZURE_OPENAI_KEY="$openAiKey" \
+  --dry-run=client \
+  -o yaml |
+  kubectl apply -n $namespace -f -
 
 # Create config map
 cat $configMapTemplate |
@@ -1883,7 +1965,7 @@ The scripts used to deploy the YAML template use the [yq](https://github.com/mik
 Below you can read the YAML manifests used to deploy the `magic8ball` chatbot to AKS.
 
 **configmap.yml**
-The `configmap.yml` defines a value for the environment variables passed to the application container. The configmap does not define any environment variable for the OpenAI key as the container.
+The `configmap.yml` defines non-sensitive environment variables passed to the application container. It does not define a value for the OpenAI key.
 
 ```yaml
 apiVersion: v1
@@ -1897,7 +1979,6 @@ data:
   IMAGE_WIDTH: "80"
   AZURE_OPENAI_TYPE: azure_ad
   AZURE_OPENAI_BASE: https://myopenai.openai.azure.com/
-  AZURE_OPENAI_KEY: ""
   AZURE_OPENAI_MODEL: gpt-35-turbo
   AZURE_OPENAI_DEPLOYMENT: magic8ballGPT
 ```
@@ -1906,12 +1987,13 @@ These are the parameters defined by the configmap:
 
 - `AZURE_OPENAI_TYPE`: specify `azure` if you want to let the application use the API key to authenticate against OpenAI. In this case, make sure to provide the Key in the `AZURE_OPENAI_KEY` environment variable. If you want to authenticate using an Azure AD security token, you need to specify `azure_ad` as a value. In this case, don't need to provide any value in the `AZURE_OPENAI_KEY` environment variable.
 - `AZURE_OPENAI_BASE`: the URL of your Azure OpenAI resource. If you use the API key to authenticate against OpenAI, you can specify the regional endpoint of your Azure OpenAI Service (e.g., [https://eastus.api.cognitive.microsoft.com/](https://eastus.api.cognitive.microsoft.com/)). If you instead plan to use Azure AD security tokens for authentication, you need to deploy your Azure OpenAI Service with a subdomain and specify the resource-specific endpoint url (e.g., [https://myopenai.openai.azure.com/](https://myopenai.openai.azure.com/)).
-- `AZURE_OPENAI_KEY`: the key of your Azure OpenAI resource. If you set `AZURE_OPENAI_TYPE` to `azure_ad` you can leave this parameter empty.
 - `AZURE_OPENAI_DEPLOYMENT`: the name of the ChatGPT deployment used by your Azure OpenAI resource, for example `gpt-35-turbo`.
 - `AZURE_OPENAI_MODEL`: the name of the ChatGPT model used by your Azure OpenAI resource, for example `gpt-35-turbo`.
 - `TITLE`: the title of the Streamlit app.
 - `TEMPERATURE`: the temperature used by the OpenAI API to generate the response.
 - `SYSTEM`: give the model instructions about how it should behave and any context it should reference when generating a response. Used to describe the assistant's personality.
+
+`AZURE_OPENAI_KEY`, when API-key authentication is used, is passed by a Kubernetes Secret rather than this ConfigMap.
 
 **deployment.yml**
 
@@ -2029,9 +2111,15 @@ spec:
                 key: AZURE_OPENAI_BASE
         - name: AZURE_OPENAI_KEY
           valueFrom:
-            configMapKeyRef:
-                name: magic8ball-configmap
+            secretKeyRef:
+                name: magic8ball-secret
                 key: AZURE_OPENAI_KEY
+                optional: true
+        - name: APP_PASSWORD_HASH
+          valueFrom:
+            secretKeyRef:
+                name: magic8ball-secret
+                key: APP_PASSWORD_HASH
         - name: AZURE_OPENAI_MODEL
           valueFrom:
             configMapKeyRef:

@@ -65,6 +65,10 @@ SOFTWARE.
 # - streamlit run app.py
 
 # Import packages
+import base64
+import binascii
+import hashlib
+import hmac
 import os
 import sys
 import time
@@ -121,14 +125,14 @@ api_type = os.environ.get("AZURE_OPENAI_TYPE", "azure")
 api_version = os.environ.get("AZURE_OPENAI_VERSION", "2023-05-15")
 engine = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 model = os.getenv("AZURE_OPENAI_MODEL")
+app_password_hash = os.getenv("APP_PASSWORD_HASH")
 
 # Configure OpenAI
 openai.api_type = api_type
 openai.api_version = api_version
 openai.api_base = api_base 
 
-# Set default Azure credential
-default_credential = DefaultAzureCredential() if openai.api_type == "azure_ad" else None
+default_credential = None
 
 # Configure a logger
 logging.basicConfig(stream = sys.stdout, 
@@ -144,16 +148,57 @@ logger.info(f"image_width: {image_width}")
 logger.info(f"temperature: {temperature}")
 logger.info(f"system: {system}")
 logger.info(f"api_base: {api_base}")
-logger.info(f"api_key: {api_key}")
+logger.info("api_key: configured" if api_key else "api_key: not configured")
 logger.info(f"api_type: {api_type}")
 logger.info(f"api_version: {api_version}")
 logger.info(f"engine: {engine}")
 logger.info(f"model: {model}")
 
+def verify_password(password, encoded_hash):
+  try:
+    algorithm, iterations, salt, expected = encoded_hash.split("$", 3)
+    if algorithm != "pbkdf2_sha256":
+      logger.error("Invalid APP_PASSWORD_HASH algorithm.")
+      return False
+
+    actual = hashlib.pbkdf2_hmac(
+      "sha256",
+      password.encode("utf-8"),
+      base64.b64decode(salt),
+      int(iterations))
+    return hmac.compare_digest(actual, base64.b64decode(expected))
+  except (ValueError, binascii.Error):
+    logger.error("Invalid APP_PASSWORD_HASH format.")
+    return False
+
+def require_app_authentication():
+  if not app_password_hash:
+    st.error("Application authentication is not configured. Set APP_PASSWORD_HASH before deployment.")
+    st.stop()
+
+  if st.session_state.get("authenticated"):
+    return
+
+  st.title(title)
+  password = st.text_input("Password", type = "password", key = "app_password")
+  if st.button("Sign in"):
+    if verify_password(password, app_password_hash):
+      st.session_state["authenticated"] = True
+      del st.session_state["app_password"]
+      st.experimental_rerun()
+    else:
+      logger.warning("Failed application sign-in attempt.")
+      st.error("Invalid password.")
+
+  st.stop()
+
+require_app_authentication()
+
 # Authenticate to Azure OpenAI
 if openai.api_type == "azure":
   openai.api_key = api_key
 elif openai.api_type == "azure_ad":
+  default_credential = DefaultAzureCredential()
   openai_token = default_credential.get_token("https://cognitiveservices.azure.com/.default")
   openai.api_key = openai_token.token
   if 'openai_token' not in st.session_state:
