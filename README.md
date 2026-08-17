@@ -1229,7 +1229,6 @@ ENV PYTHONUNBUFFERED 1
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    software-properties-common \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -1254,6 +1253,10 @@ FROM python:3.11-slim
 
 # Sets the working directory to /app
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
