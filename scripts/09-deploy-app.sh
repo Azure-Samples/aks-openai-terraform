@@ -23,6 +23,39 @@ else
   kubectl create namespace $namespace
 fi
 
+# Create secret
+if [[ -z $appPasswordHash ]]; then
+  if [[ -z $appPassword ]]; then
+    echo "Set APP_PASSWORD or APP_PASSWORD_HASH before deploying the sample application."
+    exit 1
+  fi
+
+  appPasswordHash=$(APP_PASSWORD="$appPassword" python3 - <<'PY'
+import base64
+import hashlib
+import os
+
+password = os.environ["APP_PASSWORD"].encode("utf-8")
+salt = os.urandom(16)
+iterations = 260000
+key = hashlib.pbkdf2_hmac("sha256", password, salt, iterations)
+print(f"pbkdf2_sha256${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}")
+PY
+)
+fi
+
+if [[ $openAiType == "azure" && -z $openAiKey ]]; then
+  echo "Set AZURE_OPENAI_KEY when openAiType is azure."
+  exit 1
+fi
+
+kubectl create secret generic magic8ball-secret \
+  --from-literal=APP_PASSWORD_HASH="$appPasswordHash" \
+  --from-literal=AZURE_OPENAI_KEY="$openAiKey" \
+  --dry-run=client \
+  -o yaml |
+  kubectl apply -n $namespace -f -
+
 # Create config map
 cat $configMapTemplate |
     yq "(.data.TITLE)|="\""$title"\" |

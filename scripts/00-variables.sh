@@ -27,8 +27,11 @@ openAiName="CyanOpenAi "
 openAiResourceGroupName="CyanRG"
 openAiType="azure_ad"
 openAiBase="https://cyanopenai.openai.azure.com/"
+openAiKey="${AZURE_OPENAI_KEY:-}"
 openAiModel="gpt-35-turbo"
 openAiDeployment="gpt-35-turbo"
+appPassword="${APP_PASSWORD:-}"
+appPasswordHash="${APP_PASSWORD_HASH:-}"
 
 # Nginx Ingress Controller
 nginxNamespace="ingress-basic"
